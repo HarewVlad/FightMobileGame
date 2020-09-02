@@ -26,11 +26,17 @@
 #define __HELLOWORLD_SCENE_H__
 
 #include "cocos2d.h"
+#include "editor-support/cocostudio/SimpleAudioEngine.h"
 #include "SneakyInput.h"
 #include "Player.h"
 #include "Enemy.h"
 
 const cocos2d::Vec2 GRAVITY = {0, -500.0f};
+
+enum class GameState {
+    MENU,
+    FIGHT
+};
 
 class HelloWorld : public cocos2d::Scene
 {
@@ -53,12 +59,19 @@ public:
     // Animation
     cocos2d::Vector<cocos2d::SpriteFrame *> getSpriteFrames(const char *fmt, int count);
 
+    // Menu
+    void menuStartCallback(cocos2d::Ref *sender);
+    void menuExitCallback(cocos2d::Ref *sender);
+
     CREATE_FUNC(HelloWorld);
 private:
     Player *player;
     Enemy *enemy;
     SneakyJoystick *leftJoystick;
     SneakyButton *joystickButton;
+    CocosDenshion::SimpleAudioEngine *simpleAudioEngine;
+
+    GameState currentGameState;
 };
 
 #endif // __HELLOWORLD_SCENE_H__

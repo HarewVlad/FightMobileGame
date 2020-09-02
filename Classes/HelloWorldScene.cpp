@@ -22,6 +22,7 @@
  THE SOFTWARE.
  ****************************************************************************/
 
+#include <cocos/editor-support/cocostudio/SimpleAudioEngine.h>
 #include "HelloWorldScene.h"
 
 USING_NS_CC;
@@ -31,12 +32,19 @@ Scene* HelloWorld::createScene()
     return HelloWorld::create();
 }
 
+static inline cocos2d::Vec2 getPositionForMenuItem(int itemNum) {
+    return cocos2d::Vec2 {0, itemNum * 24.0f};
+}
+
 bool HelloWorld::init()
 {
     if (!Scene::initWithPhysics())
     {
         return false;
     }
+
+    // Audio
+    simpleAudioEngine = CocosDenshion::SimpleAudioEngine::getInstance();
 
     auto visibleSize = Director::getInstance()->getVisibleSize();
     Vec2 origin = Director::getInstance()->getVisibleOrigin();
@@ -67,7 +75,6 @@ bool HelloWorld::init()
 
             auto attackSpriteFrames = getSpriteFrames("Satyr_01_Attacking_%03d.png", 12);
             auto attackAnimation = cocos2d::Animation::createWithSpriteFrames(attackSpriteFrames, 1 / 12.0f);
-
 
 
             cocos2d::AnimationCache::getInstance()->addAnimation(walkAnimation, "Satyr_WALK");
@@ -109,7 +116,7 @@ bool HelloWorld::init()
 
         background->setPosition(Vec2(origin.x + visibleSize.width * 0.5f, origin.y + visibleSize.height * 0.6f));
         background->setPhysicsBody(backgroundBody);
-        this->addChild(background, 0);
+        this->addChild(background, 0, "Fight");
     }
 
     // Player
@@ -133,8 +140,8 @@ bool HelloWorld::init()
         player->addAnimation(PlayerState::JUMP, jumpAnimation);
         player->addAnimation(PlayerState::ATTACK, attackAnimation);
         player->setPhysicsBody(satyrBody);
-        this->addChild(player->getSprite(), 1);
-        this->addChild(player->getHPBar(), 2);
+        this->addChild(player->getSprite(), 1, "Player");
+        this->addChild(player->getHPBar(), 2, "PlayerHPBar");
     }
 
     // Enemy
@@ -157,8 +164,8 @@ bool HelloWorld::init()
         enemy->addAnimation(EnemyState::HURT, hurtAnimation);
         enemy->addAnimation(EnemyState::DEAD, dieAnimation);
         enemy->setPhysicsBody(satyrBody);
-        this->addChild(enemy->getSprite(), 1);
-        this->addChild(enemy->getHPBar(), 2);
+        this->addChild(enemy->getSprite(), 1, "Enemy");
+        this->addChild(enemy->getHPBar(), 2, "EnemyHPBar");
     }
 
     // Controllers
@@ -186,22 +193,60 @@ bool HelloWorld::init()
         _eventDispatcher->addEventListenerWithSceneGraphPriority(touchListener, this);
     }
 
+    // Menu
+    {
+        auto startLabel = Label::createWithTTF("Start", "fonts/Marker Felt.ttf", 24);
+        auto exitLabel = Label::createWithTTF("Exit", "fonts/Marker Felt.ttf", 24);
+
+        auto start = MenuItemLabel::create(startLabel);
+        start->setPosition(getPositionForMenuItem(1));
+        start->setCallback(CC_CALLBACK_1(HelloWorld::menuStartCallback, this));
+        auto exit = MenuItemLabel::create(exitLabel);
+        exit->setPosition(getPositionForMenuItem(0));
+        exit->setCallback(CC_CALLBACK_1(HelloWorld::menuExitCallback, this));
+
+        auto menu = Menu::create();
+        menu->addChild(start);
+        menu->addChild(exit);
+
+        auto menuBackground = cocos2d::Sprite::create("be7c2fe4a797d602c60dba26f1ebe243.jpg");
+        menuBackground->setPosition(origin + visibleSize * 0.5f);
+        auto menuBackgroundSize = menuBackground->getContentSize();
+        menuBackground->setScaleX(visibleSize.width / menuBackgroundSize.width);
+        menuBackground->addChild(menu);
+
+        this->addChild(menuBackground, 3, "Menu");
+    }
+
     return true;
 }
 
 void HelloWorld::update(float t) {
-    auto joystickPosition = leftJoystick->getStickPosition();
-    bool isButtonPressed = joystickButton->getValue();
+    switch (currentGameState) {
+        case GameState::MENU:
+        {
+            if (!simpleAudioEngine->isBackgroundMusicPlaying()) {
+                simpleAudioEngine->playBackgroundMusic("menuSound.mp3", true);
+            }
+        }
+        break;
+        case GameState::FIGHT:
+        {
+            auto joystickPosition = leftJoystick->getStickPosition();
+            bool isButtonPressed = joystickButton->getValue();
 
-    enemy->onUpdate(joystickPosition, t);
-    player->onUpdate(joystickPosition, t);
+            enemy->onUpdate(joystickPosition, t);
+            player->onUpdate(joystickPosition, t);
 
-    if (isButtonPressed) {
-        onAttack(t);
+            if (isButtonPressed) {
+                onAttack(t);
+            }
+
+            // Update rate is way higher so value is here for 3 - 5 update function runs
+            joystickButton->setValue(false);
+        }
+        break;
     }
-
-    // Update rate is way higher so value is here for 3 - 5 update function runs
-    joystickButton->setValue(false);
 }
 
 void HelloWorld::onAttack(float t) {
@@ -265,7 +310,7 @@ void HelloWorld::initJoystick() {
 
     leftJoystick = joystickBase->getJoystick();
     leftJoystick->retain();
-    this->addChild(joystickBase, 1);
+    this->addChild(joystickBase, 1, "LeftJoystick");
 }
 
 void HelloWorld::initButton() {
@@ -295,5 +340,17 @@ void HelloWorld::initButton() {
 
     joystickButton = attackButtonBase->getButton();
     joystickButton->retain();
-    addChild(attackButtonBase);
+    this->addChild(attackButtonBase, 1, "RightJoystickButton");
+}
+
+void HelloWorld::menuStartCallback(cocos2d::Ref *sender) {
+    currentGameState = GameState::FIGHT;
+
+    simpleAudioEngine->stopBackgroundMusic(false);
+
+    this->getChildByName("Menu")->setVisible(false);
+}
+
+void HelloWorld::menuExitCallback(cocos2d::Ref *sender) {
+    Director::getInstance()->end();
 }
